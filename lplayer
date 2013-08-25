@@ -68,4 +68,4 @@ mkfifo $QUEUE_FILE
 
 aplay -t raw -c $CHANNELS -f S16_LE -r $SAMPLERATE $QUEUE_FILE \
  &> $QUEUE_FILE.log &
-exec $PLAYER $PLAYER_OPTIONS "$@" >/dev/null 2>&1
+$PLAYER $PLAYER_OPTIONS "$@" >/dev/null 2>&1
