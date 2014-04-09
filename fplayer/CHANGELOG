@@ -1,9 +1,17 @@
-LiveSource changelog
-====================
+fplayer changelog
+=================
+
+
+1.2 (2014-04-09)
+================
+
+* Divide code on functions.
+
+* Documentation.
 
 
 1.1 (2014-03-27)
-==================
+================
 
 * Shows error message if can't find flash file.
 * Fix issue #1.

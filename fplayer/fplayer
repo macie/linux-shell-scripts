@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # fplayer - watch last buffored flash movie (default in mplayer).
-#   inspired by Ivan Agarkov script (http://habrahabr.ru/blogs/linux/104420/#comment_3258122)
+#   inspired by Ivan Agarkov script
+#   (http://habrahabr.ru/blogs/linux/104420/#comment_3258122)
 #
 # https://github.com/macie/linux-shell-scripts
 #
@@ -9,7 +10,26 @@
 # MIT License (http://opensource.org/licenses/MIT)
 
 
-show_help () { 
+#
+#  DEFAULTS
+#
+
+VERSION="1.2"
+PLAYER=mplayer
+PLAYER_OPTIONS=``
+
+
+#
+#  MESSAGES
+#
+
+help_message () {
+	#
+	# Shows help message.
+	#
+	# Returns:
+	#     String message to standard output
+	#
 	echo "fplayer - watch last buffored flash movie (default in mplayer)."
 	echo "Usage:"
 	echo "  fplayer [options]"
@@ -17,54 +37,168 @@ show_help () {
 	echo "Options:"
 	echo "  -p, --player <command>          use specified player"
 	echo "  -o, --player-options <options>  set player options"
-	echo "  -h, --help                      show this help"
-	echo "  -v, --version                   show version number."
+	echo "  -h, --help                      show this help and exit"
+	echo "  -v, --version                   show version number and exit"
+}
+
+version_message() {
+	#
+	# Shows version message.
+	#
+	# Args:
+	#     version (str) - Version number.
+	#
+	# Returns:
+	#     String message to standard output
+	#
+	local version
+	local "${@}"
+
+	echo "fplayer "${version};
+	echo
+	echo "Copyright (c) 2014 Maciej Żok"
+	echo "MIT License (http://opensource.org/licenses/MIT)"
+}
+
+error_message() {
+	#
+	# Shows error message.
+	#
+	# Args:
+	#     msg (str) - Error message.
+	#
+	# Returns:
+	#     String message to err output.
+	#
+	local msg
+	local "${@}"
+
+	echo "Error: "${msg}"." 1>&2
 }
 
 
-VERSION="1.1"
-PLAYER=mplayer
-PLAYER_OPTIONS=``
+#
+#  FUNCTIONS
+#
+
+parse_args() {
+	#
+	# Parses script parameters.
+	#
+	# Args:
+	#     params (str) - Script params.
+	#
+	# Returns:
+	#     String message or nothing.
+	#
+	while [[ $1 == -* ]]; do
+		case "$1" in
+			-h|--help|-\?)
+				help_message
+				exit 0;;
+
+			-v|--version|-\?)
+				version_message version=${VERSION}
+				exit 0;;
+
+			-p|--player)
+				if (($# > 1)); then
+					PLAYER=$2
+					shift 2
+				else
+					error_message msg="no player specified"
+					exit 1
+				fi;;
+
+			-o|--player-options)
+				if (($# > 1)); then
+					PLAYER_OPTIONS=$2
+					shift 2
+				else
+					error_message msg="no player options specified"
+					exit 1
+			  	fi;;
+
+			-*)
+				error_message msg="invalid option: ${1}"
+				help_message
+				exit 1;;
+		esac
+	done
+}
+
+get_PID() {
+	#
+	# Retrives flash plugin PID.
+	#
+	# Returns:
+	#     PID number or exit (if no PID).
+	#
+	pid=`ps x | awk 'match($0,/libflashplayer.so/)' | \
+		awk '!/awk match/{print $1}'`
+
+	if [[ ${pid} != '' ]]; then
+		echo ${pid}
+	else
+		error_message msg="no PID number (no open browser?)"
+		exit 1
+	fi
+}
+
+get_FD() {
+	#
+	# Retrives FD id.
+	#
+	# Args:
+	#    pid (str) - flash plugin PID number
+	#
+	# Returns:
+	#     FD number or exit (if no FD).
+	#
+	local pid
+	local "${@}"
+
+	fd=`lsof -p ${pid} | awk 'match($0,/Flash/){print $4}' | sed 's/[a-z]$//'`
+
+	if [[ ${fd} != '' ]]; then
+		echo ${fd}
+	else
+		error_message msg="no FD number (no file in cache?)"
+		exit 1
+	fi
+}
+
+play() {
+	#
+	# Plays flash file from cache.
+	#
+	# Args:
+	#     fd (str) - FD number.
+	#     pid (str) - Flash plugin PID number.
+	#     player (str) - Movie player command.
+	#     options (str) - Movie player options.
+	#
+	local fd pid player options
+    local "${@}"
+
+	eval ${player} ${options} /proc/${pid}/fd/${fd}
+}
 
 
-while [[ $1 == -* ]]; do
-	case "$1" in
-		-h|--help|-\?) show_help; exit 0;;
-		-v|--version|-\?)
-			echo "fplayer "${VERSION};
-			echo
-			echo "Copyright (c) 2014 Maciej Żok"
-			echo "MIT License (http://opensource.org/licenses/MIT)"
-			exit 0;;
-		-p|--player) if (($# > 1)); then
-            PLAYER=$2; shift 2
-          else 
-            echo "Error: no player specified." 1>&2
-            exit 1
-          fi ;;
-		-o|--player-options) if (($# > 1)); then
-            PLAYER_OPTIONS=$2; shift 2
-          else 
-            echo "Error: no player options specified." 1>&2
-            exit 1
-          fi ;;
-		-*) echo "invalid option: $1" 1>&2; show_help; exit 1;;
-	esac
-done
+#
+#  MAIN ROUTINE
+#
 
+main() {
+	#
+	# Main program subroutine.
+	#
+	parse_args "$@"
+	get_PID pid
+	get_FD pid=${pid} fd
+	play player=${PLAYER} options=${PLAYER_OPTIONS} pid=${pid} fd=${fd}
 
-PID=`ps x | awk 'match($0,/libflashplayer.so/)' | awk '!/awk match/{print $1}'`
+	exit 0
+}
 
-if [[ ${PID} != '' ]]; then
-	FD_ID=`lsof -p ${PID} | awk 'match($0,/Flash/){print $4}' | sed 's/[a-z]$//' | tail -1`
-else
-	echo "Error: no PID number (no open browser?)." 1>&2
-	exit 1;
-fi
-
-if [[ ${FD_ID} != '' ]]; then
-	${PLAYER} ${PLAYER_OPTIONS} /proc/${PID}/fd/${FD_ID}
-else
-	echo "Error: no FD number (no file in cache?)." 1>&2
-	exit 1;
-fi
+main "$@"
